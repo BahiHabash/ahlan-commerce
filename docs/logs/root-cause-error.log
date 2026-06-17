@@ -1,0 +1,8 @@
+[ERROR] request_id=019ed5c2-5fe2-7bf3-8680-303017d25a41 code=internal_error error=
+ ● "Failed to connect to Postgres database at localhost:5432"
+ ├ apps\api\src\handlers.rs:46
+ ├ "service = catalog-db"
+ ├ "pool_size = 10"
+ │
+ ● Custom { kind: ConnectionRefused, error: "Connection refused (os error 10061)" }
+ ╰ apps\api\src\handlers.rs:45
