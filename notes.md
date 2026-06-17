@@ -1,2 +1,0 @@
-Serialization = stringify
-Deserialization = parse
