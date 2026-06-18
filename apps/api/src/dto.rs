@@ -7,6 +7,7 @@ pub struct ProductCreateRequest {
     pub price_cents: u32,
     pub inventory_quantity: u32,
     pub published: bool,
+    pub description: Option<String>,
 }
 
 impl From<ProductCreateRequest> for catalog::CreateProductParams {
@@ -17,6 +18,7 @@ impl From<ProductCreateRequest> for catalog::CreateProductParams {
             price_cents: req.price_cents,
             inventory_quantity: req.inventory_quantity,
             published: req.published,
+            description: req.description,
         }
     }
 }
@@ -29,6 +31,8 @@ pub struct ProductDto {
     pub price_cents: u32,
     pub inventory_quantity: u32,
     pub published: bool,
+    pub description: Option<String>,
+    pub published_at: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -42,6 +46,8 @@ impl From<DomainProduct> for ProductDto {
             price_cents: p.price_cents,
             inventory_quantity: p.inventory_quantity,
             published: p.published,
+            description: p.description,
+            published_at: p.published_at,
             created_at: p.created_at,
             updated_at: p.updated_at,
         }

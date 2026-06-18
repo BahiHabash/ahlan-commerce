@@ -128,6 +128,26 @@ impl From<catalog::CatalogError> for AppError {
                     handle
                 ))
             }
+            catalog::CatalogError::Database(err) => {
+                let is_conn_error = matches!(
+                    &err,
+                    sqlx::Error::Io(_)
+                        | sqlx::Error::PoolClosed
+                        | sqlx::Error::PoolTimedOut
+                );
+                let is_not_found = matches!(&err, sqlx::Error::RowNotFound);
+                let report = rootcause::Report::new_sendsync(err)
+                    .context("Database operation failed")
+                    .into_dynamic();
+                if is_conn_error {
+                    AppError::DependencyUnavailable(report)
+                } else if is_not_found {
+                    AppError::NotFound("The requested resource does not exist.".to_string())
+                } else {
+                    AppError::Internal(report)
+                }
+            }
         }
     }
 }
+

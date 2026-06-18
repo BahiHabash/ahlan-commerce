@@ -5,7 +5,6 @@ pub mod handlers;
 pub mod routes;
 
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use axum::{
     routing::get,
     Router,
@@ -21,7 +20,7 @@ use handlers::{health_handler, list_products_handler, create_product_handler};
 #[derive(Clone)]
 pub struct AppState {
     pub config: Config,
-    pub catalog: Arc<RwLock<Catalog>>,
+    pub catalog: Catalog,
 }
 
 async fn request_id_middleware(mut req: Request, next: Next) -> Response {
@@ -62,14 +61,19 @@ async fn main() {
         )
         .init();
 
-    // Initialize catalog with real clock and real ID generator
+    // Initialize database pool
+    let pool = sqlx::PgPool::connect(&config.database_url)
+        .await
+        .expect("Failed to connect to PostgreSQL database");
+
+    // Initialize catalog with pool, real clock, and real ID generator
     let clock = Arc::new(RealClock);
     let id_generator = Arc::new(RealIdGenerator);
-    let catalog = Catalog::new(clock, id_generator);
+    let catalog = Catalog::new(pool, clock, id_generator);
 
     let state = AppState {
         config: config.clone(),
-        catalog: Arc::new(RwLock::new(catalog)),
+        catalog,
     };
 
     // Set up tower-http TraceLayer for request tracing
@@ -157,20 +161,28 @@ mod integration_tests {
     use catalog::{TestClock, TestIdGenerator};
     use chrono::TimeZone;
 
-    fn test_app() -> Router {
+    async fn test_app() -> Router {
+        let database_url = std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgres://postgres@localhost:5432/ahlan_commerce".to_string());
+        let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+
+        // Truncate products table for integration testing
+        sqlx::query("TRUNCATE TABLE products").execute(&pool).await.unwrap();
+
         let fixed_time = chrono::Utc.with_ymd_and_hms(2026, 6, 17, 12, 0, 0).unwrap();
         let clock = Arc::new(TestClock::new(fixed_time));
         let id_generator = Arc::new(TestIdGenerator::new(vec![
             "test-id-123".to_string(),
         ]));
-        let catalog = Catalog::new(clock, id_generator);
+        let catalog = Catalog::new(pool, clock, id_generator);
 
         let state = AppState {
             config: Config {
                 port: 3000,
                 env: "test".to_string(),
+                database_url,
             },
-            catalog: Arc::new(RwLock::new(catalog)),
+            catalog,
         };
 
         let trace_layer = tower_http::trace::TraceLayer::new_for_http()
@@ -235,7 +247,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_health_endpoint() {
-        let app = test_app();
+        let app = test_app().await;
 
         let response = app
             .oneshot(
@@ -256,15 +268,16 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_create_and_list_products() {
-        let app = test_app();
+        let app = test_app().await;
 
         // 1. Create a product
         let create_payload = json!({
             "title": "Test Hoodie",
-            "handle": "test-hoodie",
+            "handle": "test-hoodie-list",
             "price_cents": 3500,
             "inventory_quantity": 10,
-            "published": true
+            "published": true,
+            "description": "This is a test hoodie"
         });
 
         let response = app
@@ -287,10 +300,12 @@ mod integration_tests {
 
         assert_eq!(body["product"]["id"], "test-id-123");
         assert_eq!(body["product"]["title"], "Test Hoodie");
-        assert_eq!(body["product"]["handle"], "test-hoodie");
+        assert_eq!(body["product"]["handle"], "test-hoodie-list");
         assert_eq!(body["product"]["price_cents"], 3500);
         assert_eq!(body["product"]["inventory_quantity"], 10);
         assert_eq!(body["product"]["published"], true);
+        assert_eq!(body["product"]["description"], "This is a test hoodie");
+        assert_eq!(body["product"]["published_at"], "2026-06-17T12:00:00Z");
         assert_eq!(body["product"]["created_at"], "2026-06-17T12:00:00Z");
         assert_eq!(body["product"]["updated_at"], "2026-06-17T12:00:00Z");
 
@@ -311,21 +326,24 @@ mod integration_tests {
         let body: Value = serde_json::from_slice(&body).unwrap();
 
         let products = body["products"].as_array().unwrap();
-        assert_eq!(products.len(), 1);
-        assert_eq!(products[0]["id"], "test-id-123");
-        assert_eq!(products[0]["title"], "Test Hoodie");
-        assert_eq!(products[0]["created_at"], "2026-06-17T12:00:00Z");
-        assert_eq!(products[0]["updated_at"], "2026-06-17T12:00:00Z");
+        let test_product = products.iter().find(|p| p["id"] == "test-id-123")
+            .expect("Product with test-id-123 should be present in list");
+        assert_eq!(test_product["title"], "Test Hoodie");
+        assert_eq!(test_product["handle"], "test-hoodie-list");
+        assert_eq!(test_product["description"], "This is a test hoodie");
+        assert_eq!(test_product["published_at"], "2026-06-17T12:00:00Z");
+        assert_eq!(test_product["created_at"], "2026-06-17T12:00:00Z");
+        assert_eq!(test_product["updated_at"], "2026-06-17T12:00:00Z");
     }
 
     #[tokio::test]
     async fn test_validation_errors() {
-        let app = test_app();
+        let app = test_app().await;
 
         // 1. Empty title validation
         let invalid_title_payload = json!({
             "title": "",
-            "handle": "test-hoodie",
+            "handle": "test-hoodie-validation",
             "price_cents": 3500,
             "inventory_quantity": 10,
             "published": true
@@ -380,14 +398,15 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_duplicate_handle_error() {
-        let app = test_app();
+        let app = test_app().await;
 
         let payload = json!({
             "title": "Test Hoodie",
-            "handle": "test-hoodie",
+            "handle": "test-hoodie-dup",
             "price_cents": 3500,
             "inventory_quantity": 10,
-            "published": true
+            "published": false,
+            "description": null
         });
 
         // First creation succeeds
@@ -404,6 +423,11 @@ mod integration_tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["product"]["description"], serde_json::Value::Null);
+        assert_eq!(body["product"]["published_at"], serde_json::Value::Null);
 
         // Second creation with same handle fails
         let response = app
@@ -422,13 +446,13 @@ mod integration_tests {
         let body = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
         let body: Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["error"]["code"], "duplicate_product_handle");
-        assert_eq!(body["error"]["message"], "Another product already uses this handle: test-hoodie");
+        assert_eq!(body["error"]["message"], "Another product already uses this handle: test-hoodie-dup");
         assert!(body["error"]["request_id"].is_string());
     }
 
     #[tokio::test]
     async fn test_not_found_fallback() {
-        let app = test_app();
+        let app = test_app().await;
 
         let response = app
             .oneshot(
@@ -451,7 +475,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_simulated_internal_error() {
-        let app = test_app();
+        let app = test_app().await;
 
         let response = app
             .oneshot(

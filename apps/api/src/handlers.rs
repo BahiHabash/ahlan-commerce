@@ -12,22 +12,22 @@ pub async fn health_handler() -> Json<HealthResponse> {
     })
 }
 
-pub async fn list_products_handler(State(state): State<AppState>) -> Json<ProductsResponse> {
-    let catalog = state.catalog.read().await;
-    let domain_products = catalog.list_products();
+pub async fn list_products_handler(
+    State(state): State<AppState>,
+) -> Result<Json<ProductsResponse>, AppError> {
+    let domain_products = state.catalog.list_products().await?;
     let product_dtos = domain_products.into_iter().map(ProductDto::from).collect();
-    Json(ProductsResponse {
+    Ok(Json(ProductsResponse {
         products: product_dtos,
-    })
+    }))
 }
 
 pub async fn create_product_handler(
     State(state): State<AppState>,
     Json(payload): Json<ProductCreateRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let mut catalog = state.catalog.write().await;
     let domain_params = catalog::CreateProductParams::from(payload);
-    let domain_product = catalog.create_product(domain_params)?;
+    let domain_product = state.catalog.create_product(domain_params).await?;
     let product_dto = ProductDto::from(domain_product);
     Ok((
         StatusCode::CREATED,
