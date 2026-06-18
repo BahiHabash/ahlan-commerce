@@ -1,0 +1,3 @@
+2026-06-18T00:26:01.519570Z  INFO request{request_id=019ed81e-dbaf-7df1-a3c6-a3c733350476 method=POST route=/api/products}: catalog: Product created successfully product_id=019ed81e-dbaf-7df1-a3c6-a3ded6371579 product_handle=sweater
+2026-06-18T00:26:01.519698Z  INFO request{request_id=019ed81e-dbaf-7df1-a3c6-a3c733350476 method=POST route=/api/products status=201 latency_ms=0}: api: request completed status=201 latency_ms=0
+2026-06-18T00:26:01.519792Z  INFO request{request_id=019ed81e-dbaf-7df1-a3c6-a3c733350476 method=POST route=/api/products status=201 latency_ms=0}: api: close time.busy=320µs time.idle=71.1µs

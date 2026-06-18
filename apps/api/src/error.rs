@@ -65,6 +65,9 @@ impl AppError {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ErrorCode(pub &'static str);
+
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let status = self.status_code();
@@ -78,17 +81,21 @@ impl IntoResponse for AppError {
         if status.is_server_error() {
             match &self {
                 AppError::Internal(report) | AppError::DependencyUnavailable(report) => {
-                    eprintln!(
-                        "[ERROR] request_id={} code={} error={:?}",
-                        request_id, code, report
+                    tracing::error!(
+                        request_id = %request_id,
+                        code = %code,
+                        error = ?report,
+                        "Server error occurred"
                     );
                 }
                 _ => {}
             }
         } else {
-            println!(
-                "[WARN] request_id={} code={} message={}",
-                request_id, code, message
+            tracing::warn!(
+                request_id = %request_id,
+                code = %code,
+                message = %message,
+                "Client error occurred"
             );
         }
 
@@ -100,7 +107,9 @@ impl IntoResponse for AppError {
             },
         };
 
-        (status, Json(envelope)).into_response()
+        let mut response = (status, Json(envelope)).into_response();
+        response.extensions_mut().insert(ErrorCode(code));
+        response
     }
 }
 

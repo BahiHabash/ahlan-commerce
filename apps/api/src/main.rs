@@ -24,13 +24,19 @@ pub struct AppState {
     pub catalog: Arc<RwLock<Catalog>>,
 }
 
-async fn request_id_middleware(req: Request, next: Next) -> Response {
+async fn request_id_middleware(mut req: Request, next: Next) -> Response {
     let request_id = req
         .headers()
         .get("x-request-id")
         .and_then(|value| value.to_str().ok())
         .map(|s| s.to_string())
         .unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
+
+    // Insert into request headers so down-stream layers/handlers can access it
+    req.headers_mut().insert(
+        "x-request-id",
+        axum::http::HeaderValue::from_str(&request_id).unwrap(),
+    );
 
     error::REQUEST_ID.scope(request_id.clone(), async move {
         let mut response = next.run(req).await;
@@ -47,6 +53,15 @@ async fn main() {
     // Load config once at startup
     let config = Config::from_env();
 
+    // Initialize tracing subscriber with span close events enabled
+    tracing_subscriber::fmt()
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "api=info,catalog=info,tower_http=info".into()),
+        )
+        .init();
+
     // Initialize catalog with real clock and real ID generator
     let clock = Arc::new(RealClock);
     let id_generator = Arc::new(RealIdGenerator);
@@ -57,6 +72,54 @@ async fn main() {
         catalog: Arc::new(RwLock::new(catalog)),
     };
 
+    // Set up tower-http TraceLayer for request tracing
+    let trace_layer = tower_http::trace::TraceLayer::new_for_http()
+        .make_span_with(|request: &Request<_>| {
+            let request_id = request.headers()
+                .get("x-request-id")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+            
+            let matched_path = request
+                .extensions()
+                .get::<axum::extract::MatchedPath>()
+                .map(|mp| mp.as_str())
+                .unwrap_or_else(|| request.uri().path());
+
+            tracing::info_span!(
+                "request",
+                request_id = %request_id,
+                method = %request.method(),
+                route = %matched_path,
+                status = tracing::field::Empty,
+                latency_ms = tracing::field::Empty,
+                error_code = tracing::field::Empty,
+            )
+        })
+        .on_response(|response: &Response, latency: std::time::Duration, span: &tracing::Span| {
+            let latency_ms = latency.as_millis() as u64;
+            let status = response.status().as_u16();
+            
+            span.record("status", status);
+            span.record("latency_ms", latency_ms);
+            
+            if let Some(err_code) = response.extensions().get::<crate::error::ErrorCode>() {
+                span.record("error_code", err_code.0);
+                tracing::warn!(
+                    status = status,
+                    latency_ms = latency_ms,
+                    error_code = err_code.0,
+                    "request failed"
+                );
+            } else {
+                tracing::info!(
+                    status = status,
+                    latency_ms = latency_ms,
+                    "request completed"
+                );
+            }
+        });
+
     let app = Router::new()
         .route(HEALTH_ROUTE, get(health_handler))
         .route(
@@ -65,15 +128,20 @@ async fn main() {
         )
         .route(routes::SIMULATE_ERROR_ROUTE, get(handlers::simulate_error_handler))
         .fallback(handlers::fallback_handler)
+        .layer(trace_layer)
         .layer(middleware::from_fn(request_id_middleware))
         .with_state(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], config.port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    println!(
-        "Ahlan Commerce Catalog API starting up on port {} in {} mode...",
-        config.port, config.env
+    
+    tracing::info!(
+        port = config.port,
+        env = %config.env,
+        addr = %addr,
+        "Ahlan Commerce Catalog API starting up"
     );
+    
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -105,6 +173,53 @@ mod integration_tests {
             catalog: Arc::new(RwLock::new(catalog)),
         };
 
+        let trace_layer = tower_http::trace::TraceLayer::new_for_http()
+            .make_span_with(|request: &Request<_>| {
+                let request_id = request.headers()
+                    .get("x-request-id")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("");
+                
+                let matched_path = request
+                    .extensions()
+                    .get::<axum::extract::MatchedPath>()
+                    .map(|mp| mp.as_str())
+                    .unwrap_or_else(|| request.uri().path());
+
+                tracing::info_span!(
+                    "request",
+                    request_id = %request_id,
+                    method = %request.method(),
+                    route = %matched_path,
+                    status = tracing::field::Empty,
+                    latency_ms = tracing::field::Empty,
+                    error_code = tracing::field::Empty,
+                )
+            })
+            .on_response(|response: &Response, latency: std::time::Duration, span: &tracing::Span| {
+                let latency_ms = latency.as_millis() as u64;
+                let status = response.status().as_u16();
+                
+                span.record("status", status);
+                span.record("latency_ms", latency_ms);
+                
+                if let Some(err_code) = response.extensions().get::<crate::error::ErrorCode>() {
+                    span.record("error_code", err_code.0);
+                    tracing::warn!(
+                        status = status,
+                        latency_ms = latency_ms,
+                        error_code = err_code.0,
+                        "request failed"
+                    );
+                } else {
+                    tracing::info!(
+                        status = status,
+                        latency_ms = latency_ms,
+                        "request completed"
+                    );
+                }
+            });
+
         Router::new()
             .route(HEALTH_ROUTE, get(health_handler))
             .route(
@@ -113,6 +228,7 @@ mod integration_tests {
             )
             .route(routes::SIMULATE_ERROR_ROUTE, get(handlers::simulate_error_handler))
             .fallback(handlers::fallback_handler)
+            .layer(trace_layer)
             .layer(middleware::from_fn(request_id_middleware))
             .with_state(state)
     }

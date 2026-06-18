@@ -59,12 +59,19 @@ impl Catalog {
 
     pub fn create_product(&mut self, params: CreateProductParams) -> Result<Product, CatalogError> {
         if params.title.trim().is_empty() {
+            tracing::warn!(error_code = "validation_failed", "Product creation validation failed: empty title");
             return Err(CatalogError::EmptyTitle);
         }
         if params.handle.trim().is_empty() {
+            tracing::warn!(error_code = "validation_failed", "Product creation validation failed: empty handle");
             return Err(CatalogError::EmptyHandle);
         }
         if self.products.iter().any(|p| p.handle == params.handle) {
+            tracing::warn!(
+                error_code = "duplicate_product_handle",
+                handle = %params.handle,
+                "Product creation validation failed: duplicate handle"
+            );
             return Err(CatalogError::DuplicateHandle {
                 handle: params.handle,
             });
@@ -82,6 +89,11 @@ impl Catalog {
             created_at: now,
             updated_at: now,
         };
+        tracing::info!(
+            product_id = %product.id.0,
+            product_handle = %product.handle,
+            "Product created successfully"
+        );
         self.products.push(product.clone());
         Ok(product)
     }
