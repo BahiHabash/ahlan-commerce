@@ -14,8 +14,11 @@ use axum::{
 };
 use catalog::{Catalog, RealClock, RealIdGenerator};
 use config::Config;
-use routes::{HEALTH_ROUTE, PRODUCTS_ROUTE};
-use handlers::{health_handler, list_products_handler, create_product_handler};
+use routes::{HEALTH_ROUTE, PRODUCTS_ROUTE, PUBLISHED_PRODUCTS_ROUTE, PRODUCT_PUBLICATION_ROUTE};
+use handlers::{health_handler, list_products_handler, create_product_handler,
+    list_published_products_handler, update_product_publication_handler};
+use deadpool_postgres::{Config as DbConfig, Runtime};
+use tokio_postgres::NoTls;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -61,8 +64,15 @@ async fn main() {
         )
         .init();
 
-    // Initialize database pool
-    let pool = sqlx::PgPool::connect(&config.database_url)
+    // Initialize database pool (deadpool-postgres)
+    let mut db_cfg = DbConfig::new();
+    db_cfg.url = Some(config.database_url.clone());
+    let pool = db_cfg
+        .create_pool(Some(Runtime::Tokio1), NoTls)
+        .expect("Failed to create PostgreSQL connection pool");
+
+    // Eagerly verify the connection is usable.
+    let _ = pool.get()
         .await
         .expect("Failed to connect to PostgreSQL database");
 
@@ -130,6 +140,8 @@ async fn main() {
             PRODUCTS_ROUTE,
             get(list_products_handler).post(create_product_handler),
         )
+        .route(PUBLISHED_PRODUCTS_ROUTE, get(list_published_products_handler))
+        .route(PRODUCT_PUBLICATION_ROUTE, axum::routing::patch(update_product_publication_handler))
         .route(routes::SIMULATE_ERROR_ROUTE, get(handlers::simulate_error_handler))
         .fallback(handlers::fallback_handler)
         .layer(trace_layer)
@@ -164,10 +176,18 @@ mod integration_tests {
     async fn test_app() -> Router {
         let database_url = std::env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgres://postgres@localhost:5432/ahlan_commerce".to_string());
-        let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+
+        let mut db_cfg = DbConfig::new();
+        db_cfg.url = Some(database_url.clone());
+        let pool = db_cfg
+            .create_pool(Some(Runtime::Tokio1), NoTls)
+            .expect("Failed to create test pool");
 
         // Truncate products table for integration testing
-        sqlx::query("TRUNCATE TABLE products").execute(&pool).await.unwrap();
+        {
+            let client = pool.get().await.unwrap();
+            client.execute("TRUNCATE TABLE products", &[]).await.unwrap();
+        }
 
         let fixed_time = chrono::Utc.with_ymd_and_hms(2026, 6, 17, 12, 0, 0).unwrap();
         let clock = Arc::new(TestClock::new(fixed_time));
@@ -238,6 +258,8 @@ mod integration_tests {
                 PRODUCTS_ROUTE,
                 get(list_products_handler).post(create_product_handler),
             )
+            .route(PUBLISHED_PRODUCTS_ROUTE, get(list_published_products_handler))
+            .route(PRODUCT_PUBLICATION_ROUTE, axum::routing::patch(update_product_publication_handler))
             .route(routes::SIMULATE_ERROR_ROUTE, get(handlers::simulate_error_handler))
             .fallback(handlers::fallback_handler)
             .layer(trace_layer)

@@ -59,6 +59,11 @@ pub struct ProductResponse {
     pub product: ProductDto,
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct UpdatePublicationRequest {
+    pub published: bool,
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct ProductsResponse {
     pub products: Vec<ProductDto>,

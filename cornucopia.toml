@@ -1,3 +1,2 @@
-[queries]
-path = "db/queries"
-destination = "packages/catalog/src/cornucopia.rs"
+queries = "db/queries"
+destination = "packages/db"

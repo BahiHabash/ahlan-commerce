@@ -1,9 +1,10 @@
 use crate::AppState;
 use crate::dto::{
     HealthResponse, ProductCreateRequest, ProductDto, ProductResponse, ProductsResponse,
+    UpdatePublicationRequest,
 };
 use crate::error::AppError;
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum::{Json, extract::{Path, State}, http::StatusCode, response::IntoResponse};
 use rootcause::prelude::*;
 
 pub async fn health_handler() -> Json<HealthResponse> {
@@ -35,6 +36,30 @@ pub async fn create_product_handler(
             product: product_dto,
         }),
     ))
+}
+
+pub async fn list_published_products_handler(
+    State(state): State<AppState>,
+) -> Result<Json<ProductsResponse>, AppError> {
+    let domain_products = state.catalog.list_published_products().await?;
+    let product_dtos = domain_products.into_iter().map(ProductDto::from).collect();
+    Ok(Json(ProductsResponse {
+        products: product_dtos,
+    }))
+}
+
+pub async fn update_product_publication_handler(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(payload): Json<UpdatePublicationRequest>,
+) -> Result<Json<ProductResponse>, AppError> {
+    let domain_product = state
+        .catalog
+        .update_product_publication(&id, payload.published)
+        .await?;
+    Ok(Json(ProductResponse {
+        product: ProductDto::from(domain_product),
+    }))
 }
 
 pub async fn simulate_error_handler() -> Result<StatusCode, AppError> {

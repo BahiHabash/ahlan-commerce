@@ -56,7 +56,7 @@ health:
 
 cornucopia-generate:
 ifeq ($(OS),Windows_NT)
-	set DATABASE_URL=$(DATABASE_URL) && cornucopia
+	powershell -NoProfile -Command "$$root = (Get-Location).Path; $$tmp = \"$$root\target\tmp\"; New-Item -ItemType Directory -Force -Path $$tmp | Out-Null; $$env:TEMP = $$tmp; $$env:TMP = $$tmp; cornucopia live '$(DATABASE_URL)' -q 'db/queries' -d 'packages/db' --async true"
 else
-	DATABASE_URL="$(DATABASE_URL)" cornucopia
+	cornucopia live "$(DATABASE_URL)" -q "db/queries" -d "packages/db" --async true
 endif
