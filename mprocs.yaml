@@ -1,0 +1,5 @@
+procs:
+  api:
+    shell: "make run-api"
+  postgres:
+    shell: "make db-start && make db-logs"

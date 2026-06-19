@@ -4,6 +4,14 @@ This document lists the available commands defined in the project's [Makefile](f
 
 ## Available Targets
 
+### `make start`
+Opens the local multi-process development board with `mprocs`.
+* **Wraps**: `mprocs -c mprocs.yaml`
+
+### `make stop`
+Stops the local PostgreSQL container.
+* **Wraps**: `docker stop catalog-db`
+
 ### `make run-api`
 Starts the Axum API server in development mode.
 * **Wraps**: `cargo run -p api`
@@ -15,6 +23,10 @@ Runs all unit and integration tests sequentially across the cargo workspace.
 ### `make db-start`
 Starts the local PostgreSQL container or spins up a new instance if it doesn't exist.
 * **Wraps**: `docker start catalog-db || docker run --name catalog-db -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust -d postgres`
+
+### `make db-logs`
+Follows the local PostgreSQL container logs.
+* **Wraps**: `docker logs -f catalog-db`
 
 ### `make db-migrate`
 Applies all pending database migrations to the local database environment using Atlas.

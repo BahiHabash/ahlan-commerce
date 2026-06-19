@@ -6,7 +6,13 @@ ifeq ($(OS),Windows_NT)
     ATLAS := ./atlas.exe
 endif
 
-.PHONY: run-api test db-start db-migrate health
+.PHONY: start stop run-api test db-start db-logs db-migrate health
+
+start:
+	mprocs -c mprocs.yaml
+
+stop:
+	docker stop catalog-db
 
 run-api:
 	cargo run -p api
@@ -16,6 +22,9 @@ test:
 
 db-start:
 	docker start catalog-db || docker run --name catalog-db -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust -d postgres
+
+db-logs:
+	docker logs -f catalog-db
 
 db-migrate:
 	$(ATLAS) migrate apply --env local
