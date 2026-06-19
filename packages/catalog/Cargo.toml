@@ -10,8 +10,11 @@ chrono = { version = "0.4.39", features = ["serde"] }
 thiserror = "2.0.18"
 tracing = "0.1.44"
 sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "tls-rustls", "chrono"] }
+tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4", "with-uuid-1"] }
+deadpool-postgres = "0.14.0"
+cornucopia_async = "0.6.0"
+futures = "0.3.30"
 
 [dev-dependencies]
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
-
 

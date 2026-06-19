@@ -6,13 +6,25 @@ ifeq ($(OS),Windows_NT)
     ATLAS := ./atlas.exe
 endif
 
-.PHONY: start stop run-api test db-start db-logs db-migrate health
+DB_HOST ?= localhost
+DB_PORT ?= 5432
+DB_USER ?= postgres
+DB_NAME ?= ahlan_commerce
+DATABASE_URL ?= postgres://$(DB_USER)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)
+PSQL ?= psql
+CREATEDB ?= createdb
+PG_ISREADY ?= pg_isready
+PG_CTL ?= pg_ctl
+PG_SERVICE ?= postgresql-x64-16
+PGDATA ?= E:/Set_up_Porgrams/PostgreSql/data
+
+.PHONY: start stop run-api test db-start db-create db-check db-migrate health cornucopia-generate
 
 start:
 	mprocs -c mprocs.yaml
 
 stop:
-	docker stop catalog-db
+	@echo "Using local PostgreSQL. Stop it with your local PostgreSQL service manager if needed."
 
 run-api:
 	cargo run -p api
@@ -21,13 +33,30 @@ test:
 	cargo test -- --test-threads=1
 
 db-start:
-	docker start catalog-db || docker run --name catalog-db -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust -d postgres
+ifeq ($(OS),Windows_NT)
+	powershell -NoProfile -Command "$$service = Get-Service -Name '$(PG_SERVICE)' -ErrorAction SilentlyContinue; if ($$service -and $$service.Status -ne 'Running') { try { Start-Service -Name '$(PG_SERVICE)' -ErrorAction Stop } catch { Write-Warning $$_.Exception.Message } }"
+	$(PG_ISREADY) -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) || $(PG_CTL) -D "$(PGDATA)" -l "$(PGDATA)/postgresql-local.log" start
+endif
+	$(PG_ISREADY) -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER)
 
-db-logs:
-	docker logs -f catalog-db
+db-create:
+ifeq ($(OS),Windows_NT)
+	$(PSQL) -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '$(DB_NAME)'" | findstr 1 >NUL || $(CREATEDB) -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) $(DB_NAME)
+else
+	$(PSQL) -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '$(DB_NAME)'" | grep -q 1 || $(CREATEDB) -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) $(DB_NAME)
+endif
+
+db-check: db-start db-create
 
 db-migrate:
 	$(ATLAS) migrate apply --env local
 
 health:
 	curl -f http://localhost:3000/health
+
+cornucopia-generate:
+ifeq ($(OS),Windows_NT)
+	set DATABASE_URL=$(DATABASE_URL) && cornucopia
+else
+	DATABASE_URL="$(DATABASE_URL)" cornucopia
+endif
