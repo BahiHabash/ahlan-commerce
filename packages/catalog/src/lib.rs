@@ -273,7 +273,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_and_list_products() {
+    async fn test_prd_prod_001_and_004_domain_create_and_list() {
         let pool = get_test_pool().await;
 
         // Clean up before test
@@ -321,7 +321,6 @@ mod tests {
         assert_eq!(prod1.description, Some("A very cool t-shirt".to_string()));
         assert!(prod1.published_at.is_some());
 
-        // Verify UUIDv7 format for IDs (standard uuid format is 36 chars)
         assert_eq!(prod1.id.0.len(), 36);
         assert_eq!(prod2.id.0.len(), 36);
 
@@ -339,7 +338,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_deterministic_creation() {
+    async fn test_prd_prod_001_deterministic_creation() {
         let pool = get_test_pool().await;
 
         {
@@ -375,5 +374,37 @@ mod tests {
         assert_eq!(prod.updated_at, fixed_time);
         assert_eq!(prod.description, Some("Deterministic description".to_string()));
         assert_eq!(prod.published_at, Some(fixed_time));
+    }
+
+    #[tokio::test]
+    async fn test_prd_prod_005_domain_invalid_create() {
+        let pool = get_test_pool().await;
+        let clock = Arc::new(RealClock);
+        let id_generator = Arc::new(RealIdGenerator);
+        let catalog = Catalog::new(pool, clock, id_generator);
+
+        // Test empty title
+        let input_empty_title = CreateProductParams {
+            title: "   ".to_string(),
+            handle: "valid-handle".to_string(),
+            price_cents: 1000,
+            inventory_quantity: 5,
+            published: true,
+            description: None,
+        };
+        let err_title = catalog.create_product(input_empty_title).await.unwrap_err();
+        assert!(matches!(err_title, CatalogError::EmptyTitle));
+
+        // Test empty handle
+        let input_empty_handle = CreateProductParams {
+            title: "Valid Title".to_string(),
+            handle: "".to_string(),
+            price_cents: 1000,
+            inventory_quantity: 5,
+            published: true,
+            description: None,
+        };
+        let err_handle = catalog.create_product(input_empty_handle).await.unwrap_err();
+        assert!(matches!(err_handle, CatalogError::EmptyHandle));
     }
 }
