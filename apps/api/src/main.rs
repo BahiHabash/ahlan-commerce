@@ -289,13 +289,12 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn test_create_and_list_products() {
+    async fn test_prd_prod_001_valid_create() {
         let app = test_app().await;
 
-        // 1. Create a product
         let create_payload = json!({
             "title": "Test Hoodie",
-            "handle": "test-hoodie-list",
+            "handle": "test-hoodie-create",
             "price_cents": 3500,
             "inventory_quantity": 10,
             "published": true,
@@ -303,7 +302,6 @@ mod integration_tests {
         });
 
         let response = app
-            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -322,7 +320,7 @@ mod integration_tests {
 
         assert_eq!(body["product"]["id"], "test-id-123");
         assert_eq!(body["product"]["title"], "Test Hoodie");
-        assert_eq!(body["product"]["handle"], "test-hoodie-list");
+        assert_eq!(body["product"]["handle"], "test-hoodie-create");
         assert_eq!(body["product"]["price_cents"], 3500);
         assert_eq!(body["product"]["inventory_quantity"], 10);
         assert_eq!(body["product"]["published"], true);
@@ -330,8 +328,56 @@ mod integration_tests {
         assert_eq!(body["product"]["published_at"], "2026-06-17T12:00:00Z");
         assert_eq!(body["product"]["created_at"], "2026-06-17T12:00:00Z");
         assert_eq!(body["product"]["updated_at"], "2026-06-17T12:00:00Z");
+    }
 
-        // 2. List products
+    #[tokio::test]
+    async fn test_prd_prod_003_list_empty_products() {
+        let app = test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(PRODUCTS_ROUTE)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        
+        let products = body["products"].as_array().unwrap();
+        assert!(products.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_prd_prod_004_list_persisted_products() {
+        let app = test_app().await;
+
+        let create_payload = json!({
+            "title": "Test Hoodie",
+            "handle": "test-hoodie-list",
+            "price_cents": 3500,
+            "inventory_quantity": 10,
+            "published": true,
+            "description": "This is a test hoodie"
+        });
+
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(PRODUCTS_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&create_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
         let response = app
             .oneshot(
                 Request::builder()
@@ -359,7 +405,7 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn test_validation_errors() {
+    async fn test_prd_prod_005_invalid_create_input_rejected() {
         let app = test_app().await;
 
         // 1. Empty title validation
@@ -419,7 +465,7 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn test_duplicate_handle_error() {
+    async fn test_prd_prod_002_duplicate_handle_rejected() {
         let app = test_app().await;
 
         let payload = json!({
