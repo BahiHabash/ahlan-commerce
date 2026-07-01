@@ -4,12 +4,14 @@ pub mod id;
 pub use clock::{Clock, RealClock, TestClock};
 pub use id::{IdGenerator, RealIdGenerator, TestIdGenerator};
 
+use chrono::{DateTime, Utc};
+use deadpool_postgres::Pool;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use deadpool_postgres::Pool;
-use chrono::{DateTime, Utc};
 
-use db::queries::products::{create_product, list_products, list_published_products, update_product_publication};
+use db::queries::products::{
+    create_product, list_products, list_published_products, update_product_publication,
+};
 
 /// Helper: convert a `DateTime<FixedOffset>` returned by cornucopia to `DateTime<Utc>`.
 fn to_utc(dt: DateTime<chrono::FixedOffset>) -> DateTime<Utc> {
@@ -77,13 +79,22 @@ impl Catalog {
         }
     }
 
-    pub async fn create_product(&self, params: CreateProductParams) -> Result<Product, CatalogError> {
+    pub async fn create_product(
+        &self,
+        params: CreateProductParams,
+    ) -> Result<Product, CatalogError> {
         if params.title.trim().is_empty() {
-            tracing::warn!(error_code = "validation_failed", "Product creation validation failed: empty title");
+            tracing::warn!(
+                error_code = "validation_failed",
+                "Product creation validation failed: empty title"
+            );
             return Err(CatalogError::EmptyTitle);
         }
         if params.handle.trim().is_empty() {
-            tracing::warn!(error_code = "validation_failed", "Product creation validation failed: empty handle");
+            tracing::warn!(
+                error_code = "validation_failed",
+                "Product creation validation failed: empty handle"
+            );
             return Err(CatalogError::EmptyHandle);
         }
 
@@ -92,7 +103,8 @@ impl Catalog {
         let published_at: Option<DateTime<Utc>> = if params.published { Some(now) } else { None };
 
         // Cornucopia uses DateTime<FixedOffset>; convert from Utc.
-        let now_fixed: DateTime<chrono::FixedOffset> = now.with_timezone(&chrono::FixedOffset::east_opt(0).unwrap());
+        let now_fixed: DateTime<chrono::FixedOffset> =
+            now.with_timezone(&chrono::FixedOffset::east_opt(0).unwrap());
         let published_at_fixed: Option<DateTime<chrono::FixedOffset>> =
             published_at.map(|dt| dt.with_timezone(&chrono::FixedOffset::east_opt(0).unwrap()));
 
@@ -154,10 +166,7 @@ impl Catalog {
     pub async fn list_products(&self) -> Result<Vec<Product>, CatalogError> {
         let client = self.pool.get().await?;
 
-        let rows = list_products::list_products()
-            .bind(&client)
-            .all()
-            .await?;
+        let rows = list_products::list_products().bind(&client).all().await?;
 
         let products = rows
             .into_iter()
@@ -221,13 +230,7 @@ impl Catalog {
         let client = self.pool.get().await?;
 
         let row = update_product_publication::update_product_publication()
-            .bind(
-                &client,
-                &published,
-                &published_at_fixed,
-                &now_fixed,
-                &id,
-            )
+            .bind(&client, &published, &published_at_fixed, &now_fixed, &id)
             .opt()
             .await?
             .ok_or_else(|| {
@@ -372,7 +375,10 @@ mod tests {
         assert_eq!(prod.id.0, "prod-id-1");
         assert_eq!(prod.created_at, fixed_time);
         assert_eq!(prod.updated_at, fixed_time);
-        assert_eq!(prod.description, Some("Deterministic description".to_string()));
+        assert_eq!(
+            prod.description,
+            Some("Deterministic description".to_string())
+        );
         assert_eq!(prod.published_at, Some(fixed_time));
     }
 
