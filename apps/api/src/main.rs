@@ -1,6 +1,7 @@
 pub mod config;
 pub mod dto;
 pub mod error;
+pub mod graphql;
 pub mod handlers;
 pub mod routes;
 
@@ -12,6 +13,7 @@ use axum::{
     middleware::{self, Next},
     response::Response,
 };
+use crate::graphql::AppSchema;
 use catalog::{Catalog, RealClock, RealIdGenerator};
 use config::Config;
 use routes::{HEALTH_ROUTE, PRODUCTS_ROUTE, PUBLISHED_PRODUCTS_ROUTE, PRODUCT_PUBLICATION_ROUTE};
@@ -24,6 +26,7 @@ use tokio_postgres::NoTls;
 pub struct AppState {
     pub config: Config,
     pub catalog: Catalog,
+    pub schema: AppSchema,
 }
 
 async fn request_id_middleware(mut req: Request, next: Next) -> Response {
@@ -81,9 +84,12 @@ async fn main() {
     let id_generator = Arc::new(RealIdGenerator);
     let catalog = Catalog::new(pool, clock, id_generator);
 
+    let schema = crate::graphql::build_schema(catalog.clone());
+
     let state = AppState {
         config: config.clone(),
         catalog,
+        schema,
     };
 
     // Set up tower-http TraceLayer for request tracing
@@ -142,6 +148,7 @@ async fn main() {
         )
         .route(PUBLISHED_PRODUCTS_ROUTE, get(list_published_products_handler))
         .route(PRODUCT_PUBLICATION_ROUTE, axum::routing::patch(update_product_publication_handler))
+        .route(routes::GRAPHQL_ROUTE, axum::routing::post(crate::graphql::graphql_handler))
         .route(routes::SIMULATE_ERROR_ROUTE, get(handlers::simulate_error_handler))
         .fallback(handlers::fallback_handler)
         .layer(trace_layer)
@@ -196,6 +203,8 @@ mod integration_tests {
         ]));
         let catalog = Catalog::new(pool, clock, id_generator);
 
+        let schema = crate::graphql::build_schema(catalog.clone());
+
         let state = AppState {
             config: Config {
                 port: 3000,
@@ -203,6 +212,7 @@ mod integration_tests {
                 database_url,
             },
             catalog,
+            schema,
         };
 
         let trace_layer = tower_http::trace::TraceLayer::new_for_http()
@@ -260,6 +270,7 @@ mod integration_tests {
             )
             .route(PUBLISHED_PRODUCTS_ROUTE, get(list_published_products_handler))
             .route(PRODUCT_PUBLICATION_ROUTE, axum::routing::patch(update_product_publication_handler))
+            .route(routes::GRAPHQL_ROUTE, axum::routing::post(crate::graphql::graphql_handler))
             .route(routes::SIMULATE_ERROR_ROUTE, get(handlers::simulate_error_handler))
             .fallback(handlers::fallback_handler)
             .layer(trace_layer)
@@ -571,6 +582,104 @@ mod integration_tests {
         assert!(!body_str.contains("localhost:5432"));
         assert!(!body_str.contains("ConnectionRefused"));
         assert!(!body_str.contains("catalog-db"));
+    }
+
+    #[tokio::test]
+    async fn test_graphql_products_query_and_mutation() {
+        let app = test_app().await;
+
+        let mutation = r#"
+            mutation {
+                productCreate(input: {
+                    title: "GraphQL Hoodie"
+                    handle: "graphql-hoodie"
+                    priceCents: 4500
+                    inventoryQuantity: 20
+                    published: true
+                    description: "Created via GraphQL"
+                }) {
+                    id
+                    title
+                    handle
+                    priceCents
+                    inventoryQuantity
+                    published
+                    description
+                    createdAt
+                    updatedAt
+                    publishedAt
+                }
+            }
+        "#;
+
+        let mutation_payload = json!({
+            "query": mutation
+        });
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(routes::GRAPHQL_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&mutation_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        
+        let product = &body["data"]["productCreate"];
+        assert_eq!(product["id"], "test-id-123");
+        assert_eq!(product["title"], "GraphQL Hoodie");
+        assert_eq!(product["handle"], "graphql-hoodie");
+        assert_eq!(product["priceCents"], 4500);
+        assert_eq!(product["inventoryQuantity"], 20);
+        assert_eq!(product["published"], true);
+        assert_eq!(product["description"], "Created via GraphQL");
+        assert_eq!(product["createdAt"], "2026-06-17T12:00:00Z");
+        assert_eq!(product["updatedAt"], "2026-06-17T12:00:00Z");
+        assert_eq!(product["publishedAt"], "2026-06-17T12:00:00Z");
+
+        // Query test
+        let query = r#"
+            query {
+                products {
+                    id
+                    title
+                    handle
+                }
+            }
+        "#;
+
+        let query_payload = json!({
+            "query": query
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(routes::GRAPHQL_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&query_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        
+        let products = body["data"]["products"].as_array().unwrap();
+        let test_product = products.iter().find(|p| p["id"] == "test-id-123").unwrap();
+        assert_eq!(test_product["title"], "GraphQL Hoodie");
+        assert_eq!(test_product["handle"], "graphql-hoodie");
     }
 }
 
