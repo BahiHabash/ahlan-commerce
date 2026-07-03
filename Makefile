@@ -29,6 +29,9 @@ stop:
 run-api:
 	cargo run -p api
 
+run-admin:
+	cd apps/admin && npm run dev
+
 test:
 	cargo test -- --test-threads=1
 

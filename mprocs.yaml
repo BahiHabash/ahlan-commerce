@@ -3,3 +3,5 @@ procs:
     shell: "make db-check"
   api:
     shell: "make run-api"
+  admin:
+    shell: "make run-admin"
