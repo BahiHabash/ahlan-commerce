@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { client } from '../api/graphql'
 import { gql } from 'graphql-request'
-import { Product } from './useProducts'
+import { type Product } from './useProducts'
 
 const CREATE_PRODUCT = gql`
   mutation CreateProduct($input: ProductCreateInput!) {

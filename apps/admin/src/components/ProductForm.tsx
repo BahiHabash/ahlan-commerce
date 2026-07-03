@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useCreateProduct, ProductCreateInput } from '../hooks/useCreateProduct'
+import { useCreateProduct, type ProductCreateInput } from '../hooks/useCreateProduct'
 
 export function ProductForm() {
   const { mutate, isPending, isError, error, isSuccess } = useCreateProduct()
