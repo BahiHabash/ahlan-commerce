@@ -122,6 +122,9 @@ impl From<catalog::CatalogError> for AppError {
             catalog::CatalogError::EmptyHandle => {
                 AppError::Validation("Product handle is required.".to_string())
             }
+            catalog::CatalogError::EmptyInputPath => {
+                AppError::Validation("Input path is required.".to_string())
+            }
             catalog::CatalogError::DuplicateHandle { handle } => {
                 AppError::DuplicateProductHandle(format!(
                     "Another product already uses this handle: {}",

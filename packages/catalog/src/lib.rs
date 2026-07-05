@@ -12,6 +12,7 @@ use std::sync::Arc;
 use db::queries::products::{
     create_product, list_products, list_published_products, update_product_publication,
 };
+use db::queries::import_jobs::create_import_job;
 
 /// Helper: convert a `DateTime<FixedOffset>` returned by cornucopia to `DateTime<Utc>`.
 fn to_utc(dt: DateTime<chrono::FixedOffset>) -> DateTime<Utc> {
@@ -36,6 +37,12 @@ pub struct Product {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportJob {
+    pub id: String,
+    pub status: String,
+}
+
 /// Input struct for creating a product (used by API layer).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct CreateProductParams {
@@ -53,6 +60,8 @@ pub enum CatalogError {
     EmptyTitle,
     #[error("Product handle is required.")]
     EmptyHandle,
+    #[error("Input path is required.")]
+    EmptyInputPath,
     #[error("Another product already uses this handle.")]
     DuplicateHandle { handle: String },
     #[error("Product not found.")]
@@ -257,6 +266,53 @@ impl Catalog {
             "Product publication updated"
         );
         Ok(product)
+    }
+
+    pub async fn enqueue_import_job(
+        &self,
+        input_path: String,
+    ) -> Result<ImportJob, CatalogError> {
+        if input_path.trim().is_empty() {
+            tracing::warn!(
+                error_code = "validation_failed",
+                "Import job creation validation failed: empty input path"
+            );
+            return Err(CatalogError::EmptyInputPath);
+        }
+
+        let id_str = self.id_generator.generate_id();
+        let id = uuid::Uuid::parse_str(&id_str).unwrap();
+        let now = self.clock.now();
+        let now_fixed: DateTime<chrono::FixedOffset> =
+            now.with_timezone(&chrono::FixedOffset::east_opt(0).unwrap());
+
+        let client = self.pool.get().await?;
+
+        let row = create_import_job::create_import_job()
+            .bind(
+                &client,
+                &id,
+                &"queued",
+                &input_path.as_str(),
+                &0,
+                &None::<String>,
+                &now_fixed,
+                &now_fixed,
+            )
+            .one()
+            .await
+            .map_err(CatalogError::Database)?;
+
+        let job = ImportJob {
+            id: row.id.to_string(),
+            status: row.status,
+        };
+
+        tracing::info!(
+            job_id = %job.id,
+            "Import job queued successfully"
+        );
+        Ok(job)
     }
 }
 

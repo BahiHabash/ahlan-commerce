@@ -93,6 +93,7 @@ fn map_catalog_error(err: CatalogError) -> Error {
     let (code, message) = match &err {
         CatalogError::EmptyTitle => ("validation_failed", "Product title is required.".to_string()),
         CatalogError::EmptyHandle => ("validation_failed", "Product handle is required.".to_string()),
+        CatalogError::EmptyInputPath => ("validation_failed", "Input path is required.".to_string()),
         CatalogError::DuplicateHandle { handle } => (
             "duplicate_product_handle",
             format!("Another product already uses this handle: {}", handle),

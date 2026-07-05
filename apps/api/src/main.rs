@@ -16,9 +16,9 @@ use axum::{
 use crate::graphql::AppSchema;
 use catalog::{Catalog, RealClock, RealIdGenerator};
 use config::Config;
-use routes::{HEALTH_ROUTE, PRODUCTS_ROUTE, PUBLISHED_PRODUCTS_ROUTE, PRODUCT_PUBLICATION_ROUTE};
+use routes::{HEALTH_ROUTE, PRODUCTS_ROUTE, PUBLISHED_PRODUCTS_ROUTE, PRODUCT_PUBLICATION_ROUTE, IMPORT_JOBS_ROUTE};
 use handlers::{health_handler, list_products_handler, create_product_handler,
-    list_published_products_handler, update_product_publication_handler};
+    list_published_products_handler, update_product_publication_handler, create_import_job_handler};
 use deadpool_postgres::{Config as DbConfig, Runtime};
 use tokio_postgres::NoTls;
 
@@ -148,6 +148,7 @@ async fn main() {
         )
         .route(PUBLISHED_PRODUCTS_ROUTE, get(list_published_products_handler))
         .route(PRODUCT_PUBLICATION_ROUTE, axum::routing::patch(update_product_publication_handler))
+        .route(IMPORT_JOBS_ROUTE, axum::routing::post(create_import_job_handler))
         .route(routes::GRAPHQL_ROUTE, axum::routing::post(crate::graphql::graphql_handler))
         .route(routes::SIMULATE_ERROR_ROUTE, get(handlers::simulate_error_handler))
         .fallback(handlers::fallback_handler)
@@ -181,6 +182,10 @@ mod integration_tests {
     use chrono::TimeZone;
 
     async fn test_app() -> Router {
+        test_app_with_id("test-id-123".to_string()).await
+    }
+
+    async fn test_app_with_id(initial_id: String) -> Router {
         let database_url = std::env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgres://postgres@localhost:5432/ahlan_commerce".to_string());
 
@@ -199,7 +204,7 @@ mod integration_tests {
         let fixed_time = chrono::Utc.with_ymd_and_hms(2026, 6, 17, 12, 0, 0).unwrap();
         let clock = Arc::new(TestClock::new(fixed_time));
         let id_generator = Arc::new(TestIdGenerator::new(vec![
-            "test-id-123".to_string(),
+            initial_id,
         ]));
         let catalog = Catalog::new(pool, clock, id_generator);
 
@@ -270,6 +275,7 @@ mod integration_tests {
             )
             .route(PUBLISHED_PRODUCTS_ROUTE, get(list_published_products_handler))
             .route(PRODUCT_PUBLICATION_ROUTE, axum::routing::patch(update_product_publication_handler))
+            .route(IMPORT_JOBS_ROUTE, axum::routing::post(create_import_job_handler))
             .route(routes::GRAPHQL_ROUTE, axum::routing::post(crate::graphql::graphql_handler))
             .route(routes::SIMULATE_ERROR_ROUTE, get(handlers::simulate_error_handler))
             .fallback(handlers::fallback_handler)
@@ -680,6 +686,62 @@ mod integration_tests {
         let test_product = products.iter().find(|p| p["id"] == "test-id-123").unwrap();
         assert_eq!(test_product["title"], "GraphQL Hoodie");
         assert_eq!(test_product["handle"], "graphql-hoodie");
+    }
+
+    #[tokio::test]
+    async fn test_import_job_valid_create() {
+        let app = test_app_with_id("018e69d0-0000-7000-0000-000000000000".to_string()).await;
+
+        let payload = json!({
+            "input_path": "fixtures/products.json"
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(IMPORT_JOBS_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let body = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        
+        assert_eq!(body["job"]["status"], "queued");
+        assert!(body["job"]["id"].is_string());
+    }
+
+    #[tokio::test]
+    async fn test_import_job_invalid_create() {
+        let app = test_app().await;
+
+        let payload = json!({
+            "input_path": "   "
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(IMPORT_JOBS_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        
+        assert_eq!(body["error"]["code"], "validation_failed");
+        assert_eq!(body["error"]["message"], "Input path is required.");
     }
 }
 

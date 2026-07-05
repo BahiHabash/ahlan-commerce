@@ -73,3 +73,19 @@ pub struct ProductsResponse {
 pub struct HealthResponse {
     pub status: String,
 }
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct ImportJobCreateRequest {
+    pub input_path: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct JobDto {
+    pub id: String,
+    pub status: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ImportJobResponse {
+    pub job: JobDto,
+}

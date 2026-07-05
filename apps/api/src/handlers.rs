@@ -1,7 +1,7 @@
 use crate::AppState;
 use crate::dto::{
     HealthResponse, ProductCreateRequest, ProductDto, ProductResponse, ProductsResponse,
-    UpdatePublicationRequest,
+    UpdatePublicationRequest, ImportJobCreateRequest, ImportJobResponse, JobDto,
 };
 use crate::error::AppError;
 use axum::{Json, extract::{Path, State}, http::StatusCode, response::IntoResponse};
@@ -60,6 +60,22 @@ pub async fn update_product_publication_handler(
     Ok(Json(ProductResponse {
         product: ProductDto::from(domain_product),
     }))
+}
+
+pub async fn create_import_job_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<ImportJobCreateRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let domain_job = state.catalog.enqueue_import_job(payload.input_path).await?;
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(ImportJobResponse {
+            job: JobDto {
+                id: domain_job.id,
+                status: domain_job.status,
+            },
+        }),
+    ))
 }
 
 pub async fn simulate_error_handler() -> Result<StatusCode, AppError> {

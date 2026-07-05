@@ -1,4 +1,3 @@
 // This file was generated with `cornucopia`. Do not modify.
 
-pub mod import_jobs;
-pub mod products;
+pub mod create_import_job;
