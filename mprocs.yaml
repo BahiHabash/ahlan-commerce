@@ -5,3 +5,5 @@ procs:
     shell: "make run-api"
   admin:
     shell: "make run-admin"
+  worker:
+    shell: "cargo run -p worker"

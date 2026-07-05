@@ -195,10 +195,10 @@ mod integration_tests {
             .create_pool(Some(Runtime::Tokio1), NoTls)
             .expect("Failed to create test pool");
 
-        // Truncate products table for integration testing
+        // Truncate products and import_jobs table for integration testing
         {
             let client = pool.get().await.unwrap();
-            client.execute("TRUNCATE TABLE products", &[]).await.unwrap();
+            client.execute("TRUNCATE TABLE products, import_jobs", &[]).await.unwrap();
         }
 
         let fixed_time = chrono::Utc.with_ymd_and_hms(2026, 6, 17, 12, 0, 0).unwrap();

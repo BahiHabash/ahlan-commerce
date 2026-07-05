@@ -2533,6 +2533,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "worker"
+version = "0.1.0"
+dependencies = [
+ "catalog",
+ "chrono",
+ "cornucopia",
+ "deadpool-postgres",
+ "dotenvy",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-postgres",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "zerocopy"
 version = "0.8.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
