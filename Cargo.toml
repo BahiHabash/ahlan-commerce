@@ -4,5 +4,6 @@ members = [
     "apps/api",
     "apps/worker",
     "packages/catalog",
+    "packages/cache",
     "packages/db",
 ]
