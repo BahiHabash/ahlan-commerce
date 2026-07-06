@@ -27,6 +27,7 @@ pub struct AppState {
     pub config: Config,
     pub catalog: Catalog,
     pub schema: AppSchema,
+    pub cache: cache::Cache,
 }
 
 async fn request_id_middleware(mut req: Request, next: Next) -> Response {
@@ -85,11 +86,15 @@ async fn main() {
     let catalog = Catalog::new(pool, clock, id_generator);
 
     let schema = crate::graphql::build_schema(catalog.clone());
+    
+    let cache = cache::Cache::new(&config.redis_url)
+        .expect("Failed to create Redis cache client");
 
     let state = AppState {
         config: config.clone(),
         catalog,
         schema,
+        cache,
     };
 
     // Set up tower-http TraceLayer for request tracing
@@ -151,6 +156,7 @@ async fn main() {
         .route(IMPORT_JOBS_ROUTE, axum::routing::post(create_import_job_handler))
         .route(routes::GRAPHQL_ROUTE, axum::routing::post(crate::graphql::graphql_handler))
         .route(routes::SIMULATE_ERROR_ROUTE, get(handlers::simulate_error_handler))
+        .route(routes::STOREFRONT_PRODUCT_ROUTE, get(handlers::storefront_product_handler))
         .fallback(handlers::fallback_handler)
         .layer(trace_layer)
         .layer(middleware::from_fn(request_id_middleware))
@@ -209,15 +215,19 @@ mod integration_tests {
         let catalog = Catalog::new(pool, clock, id_generator);
 
         let schema = crate::graphql::build_schema(catalog.clone());
+        let cache = cache::Cache::new("redis://127.0.0.1:6379")
+            .expect("Failed to create test cache client");
 
         let state = AppState {
             config: Config {
                 port: 3000,
                 env: "test".to_string(),
                 database_url,
+                redis_url: "redis://127.0.0.1:6379".to_string(),
             },
             catalog,
             schema,
+            cache,
         };
 
         let trace_layer = tower_http::trace::TraceLayer::new_for_http()
@@ -278,6 +288,7 @@ mod integration_tests {
             .route(IMPORT_JOBS_ROUTE, axum::routing::post(create_import_job_handler))
             .route(routes::GRAPHQL_ROUTE, axum::routing::post(crate::graphql::graphql_handler))
             .route(routes::SIMULATE_ERROR_ROUTE, get(handlers::simulate_error_handler))
+            .route(routes::STOREFRONT_PRODUCT_ROUTE, get(handlers::storefront_product_handler))
             .fallback(handlers::fallback_handler)
             .layer(trace_layer)
             .layer(middleware::from_fn(request_id_middleware))
@@ -742,6 +753,120 @@ mod integration_tests {
         
         assert_eq!(body["error"]["code"], "validation_failed");
         assert_eq!(body["error"]["message"], "Input path is required.");
+    }
+
+    #[tokio::test]
+    async fn test_storefront_render_and_cache_behavior() {
+        let app = test_app().await;
+
+        // 1. Fetching a non-existent product returns 404
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/products/storefront-test-handle")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        // 2. Create an unpublished product
+        let create_payload = json!({
+            "title": "Storefront Hoodie",
+            "handle": "storefront-test-handle",
+            "price_cents": 5000,
+            "inventory_quantity": 5,
+            "published": false,
+            "description": "Storefront Test"
+        });
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(PRODUCTS_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&create_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        let product_id = body["product"]["id"].as_str().unwrap().to_string();
+
+        // 3. Fetching an unpublished product returns 404
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/products/storefront-test-handle")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        // 4. Publish the product
+        let pub_payload = json!({ "published": true });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri(&format!("/api/products/{}/publication", product_id))
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&pub_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // 5. Fetch the product, it should render HTML (Cache Miss -> DB load -> HTML response)
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/products/storefront-test-handle")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
+        let html_string = String::from_utf8(body_bytes.to_vec()).unwrap();
+        assert!(html_string.contains("Storefront Hoodie"));
+        assert!(html_string.contains("$50.00"));
+        assert!(html_string.contains("5 in stock"));
+
+        // The handler will have set the cache asynchronously. 
+        // 6. Fetch again, it should return HTML (Cache Hit)
+        // Note: the test cache is using a real redis server locally. 
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/products/storefront-test-handle")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
+        let html_string_2 = String::from_utf8(body_bytes.to_vec()).unwrap();
+        assert_eq!(html_string, html_string_2);
     }
 }
 

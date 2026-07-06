@@ -4,8 +4,10 @@ use crate::dto::{
     UpdatePublicationRequest, ImportJobCreateRequest, ImportJobResponse, JobDto,
 };
 use crate::error::AppError;
-use axum::{Json, extract::{Path, State}, http::StatusCode, response::IntoResponse};
+use axum::{Json, extract::{Path, State}, http::StatusCode, response::{IntoResponse, Html}};
 use rootcause::prelude::*;
+use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
 
 pub async fn health_handler() -> Json<HealthResponse> {
     Json(HealthResponse {
@@ -29,11 +31,16 @@ pub async fn create_product_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let domain_params = catalog::CreateProductParams::from(payload);
     let domain_product = state.catalog.create_product(domain_params).await?;
-    let product_dto = ProductDto::from(domain_product);
+    let dto = ProductDto::from(domain_product);
+
+    // Cache Invalidation
+    let cache_key = cache::keys::storefront_product_page(&dto.handle);
+    state.cache.delete(&cache_key).await;
+
     Ok((
         StatusCode::CREATED,
         Json(ProductResponse {
-            product: product_dto,
+            product: dto,
         }),
     ))
 }
@@ -57,8 +64,14 @@ pub async fn update_product_publication_handler(
         .catalog
         .update_product_publication(&id, payload.published)
         .await?;
+    let dto = ProductDto::from(domain_product);
+
+    // Cache Invalidation
+    let cache_key = cache::keys::storefront_product_page(&dto.handle);
+    state.cache.delete(&cache_key).await;
+
     Ok(Json(ProductResponse {
-        product: ProductDto::from(domain_product),
+        product: dto,
     }))
 }
 
@@ -67,15 +80,65 @@ pub async fn create_import_job_handler(
     Json(payload): Json<ImportJobCreateRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let domain_job = state.catalog.enqueue_import_job(payload.input_path).await?;
+    let dto = JobDto {
+        id: domain_job.id,
+        status: domain_job.status,
+    };
     Ok((
         StatusCode::ACCEPTED,
         Json(ImportJobResponse {
-            job: JobDto {
-                id: domain_job.id,
-                status: domain_job.status,
-            },
+            job: dto,
         }),
     ))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StorefrontPageCache {
+    pub html: String,
+    pub product_id: String,
+    pub product_updated_at: DateTime<Utc>,
+    pub rendered_at: DateTime<Utc>,
+}
+
+pub async fn storefront_product_handler(
+    State(state): State<AppState>,
+    Path(handle): Path<String>,
+) -> Result<Html<String>, AppError> {
+    let cache_key = cache::keys::storefront_product_page(&handle);
+
+    if let Some(cached) = state.cache.get::<StorefrontPageCache>(&cache_key).await {
+        return Ok(Html(cached.html));
+    }
+
+    let product_opt = state.catalog.get_product_by_handle(&handle).await?;
+    let product = match product_opt {
+        Some(p) if p.published => p,
+        _ => return Err(AppError::NotFound("Product not found".to_string())),
+    };
+
+    let inventory_msg = if product.inventory_quantity > 0 {
+        format!("{} in stock", product.inventory_quantity)
+    } else {
+        "Out of stock".to_string()
+    };
+
+    let price_str = format!("${:.2}", product.price_cents as f64 / 100.0);
+
+    let html = format!(
+        "<!doctype html>\n<html><head><title>{}</title></head><body><h1>{}</h1><p>{}</p><p>{}</p></body></html>",
+        product.title, product.title, price_str, inventory_msg
+    );
+
+    let payload = StorefrontPageCache {
+        html: html.clone(),
+        product_id: product.id.0.clone(),
+        product_updated_at: product.updated_at,
+        rendered_at: Utc::now(),
+    };
+
+    state.cache.set(&cache_key, &payload, 300).await;
+
+    Ok(Html(html))
 }
 
 pub async fn simulate_error_handler() -> Result<StatusCode, AppError> {

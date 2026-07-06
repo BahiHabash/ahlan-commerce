@@ -3,11 +3,13 @@ pub struct Config {
     pub port: u16,
     pub env: String,
     pub database_url: String,
+    pub redis_url: String,
 }
 
 pub const PORT_ENV_KEY: &str = "PORT";
 pub const ENV_ENV_KEY: &str = "ENV";
 pub const DATABASE_URL_ENV_KEY: &str = "DATABASE_URL";
+pub const REDIS_URL_ENV_KEY: &str = "REDIS_URL";
 
 impl Config {
     pub fn from_env() -> Self {
@@ -20,8 +22,10 @@ impl Config {
         let env = std::env::var(ENV_ENV_KEY).unwrap_or_else(|_| "development".to_string());
         let database_url = std::env::var(DATABASE_URL_ENV_KEY)
             .unwrap_or_else(|_| "postgres://postgres@localhost:5432/ahlan_commerce".to_string());
+        let redis_url = std::env::var(REDIS_URL_ENV_KEY)
+            .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
             
-        Self { port, env, database_url }
+        Self { port, env, database_url, redis_url }
     }
 }
 

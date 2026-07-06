@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use db::queries::products::{
     create_product, list_products, list_published_products, update_product_publication,
+    get_product_by_handle,
 };
 use db::queries::import_jobs::create_import_job;
 
@@ -221,6 +222,33 @@ impl Catalog {
             .collect();
 
         Ok(products)
+    }
+
+    pub async fn get_product_by_handle(
+        &self,
+        handle: &str,
+    ) -> Result<Option<Product>, CatalogError> {
+        let client = self.pool.get().await?;
+
+        let row_opt = get_product_by_handle::get_product_by_handle()
+            .bind(&client, &handle)
+            .opt()
+            .await?;
+
+        let product = row_opt.map(|row| Product {
+            id: ProductId(row.id),
+            title: row.title,
+            handle: row.handle,
+            price_cents: row.price_cents as u32,
+            inventory_quantity: row.inventory_quantity as u32,
+            published: row.published,
+            description: row.description,
+            published_at: row.published_at.map(to_utc),
+            created_at: to_utc(row.created_at),
+            updated_at: to_utc(row.updated_at),
+        });
+
+        Ok(product)
     }
 
     pub async fn update_product_publication(
