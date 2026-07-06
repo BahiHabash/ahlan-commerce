@@ -497,4 +497,41 @@ mod tests {
         let err_handle = catalog.create_product(input_empty_handle).await.unwrap_err();
         assert!(matches!(err_handle, CatalogError::EmptyHandle));
     }
+
+    #[tokio::test]
+    async fn test_get_product_by_handle() {
+        let pool = get_test_pool().await;
+        let clock = Arc::new(RealClock);
+        let id_generator = Arc::new(RealIdGenerator);
+        // Clean up handle
+        {
+            let client = pool.get().await.unwrap();
+            client
+                .execute("DELETE FROM products WHERE handle = 'handle-to-find'", &[])
+                .await
+                .unwrap();
+        }
+
+        let catalog = Catalog::new(pool, clock, id_generator);
+
+        // Test non-existent handle
+        let not_found = catalog.get_product_by_handle("handle-to-find").await.unwrap();
+        assert!(not_found.is_none());
+
+        // Test existing handle
+        let input = CreateProductParams {
+            title: "Product to Find".to_string(),
+            handle: "handle-to-find".to_string(),
+            price_cents: 1500,
+            inventory_quantity: 10,
+            published: true,
+            description: Some("Found it!".to_string()),
+        };
+        let created = catalog.create_product(input).await.unwrap();
+
+        let found = catalog.get_product_by_handle("handle-to-find").await.unwrap().unwrap();
+        assert_eq!(found.id, created.id);
+        assert_eq!(found.title, created.title);
+        assert_eq!(found.handle, created.handle);
+    }
 }

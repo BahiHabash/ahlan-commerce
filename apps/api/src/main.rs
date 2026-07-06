@@ -192,6 +192,10 @@ mod integration_tests {
     }
 
     async fn test_app_with_id(initial_id: String) -> Router {
+        test_app_with_id_and_redis(initial_id, "redis://127.0.0.1:6379").await
+    }
+
+    async fn test_app_with_id_and_redis(initial_id: String, redis_url: &str) -> Router {
         let database_url = std::env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgres://postgres@localhost:5432/ahlan_commerce".to_string());
 
@@ -215,7 +219,7 @@ mod integration_tests {
         let catalog = Catalog::new(pool, clock, id_generator);
 
         let schema = crate::graphql::build_schema(catalog.clone());
-        let cache = cache::Cache::new("redis://127.0.0.1:6379")
+        let cache = cache::Cache::new(redis_url)
             .expect("Failed to create test cache client");
 
         let state = AppState {
@@ -223,7 +227,7 @@ mod integration_tests {
                 port: 3000,
                 env: "test".to_string(),
                 database_url,
-                redis_url: "redis://127.0.0.1:6379".to_string(),
+                redis_url: redis_url.to_string(),
             },
             catalog,
             schema,
@@ -759,6 +763,11 @@ mod integration_tests {
     async fn test_storefront_render_and_cache_behavior() {
         let app = test_app().await;
 
+        // Clear cache key first to avoid test cross-pollution from previous runs
+        let cache_key = cache::keys::storefront_product_page("storefront-test-handle");
+        let cache = cache::Cache::new("redis://127.0.0.1:6379").unwrap();
+        cache.delete(&cache_key).await;
+
         // 1. Fetching a non-existent product returns 404
         let response = app
             .clone()
@@ -867,6 +876,60 @@ mod integration_tests {
         let body_bytes = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
         let html_string_2 = String::from_utf8(body_bytes.to_vec()).unwrap();
         assert_eq!(html_string, html_string_2);
+    }
+
+    #[tokio::test]
+    async fn test_storefront_redis_outage_fallback() {
+        // Clear cache key first to avoid cross-pollution
+        let cache_key = cache::keys::storefront_product_page("outage-hoodie");
+        let cache = cache::Cache::new("redis://127.0.0.1:6379").unwrap();
+        cache.delete(&cache_key).await;
+
+        // Use an unreachable Redis port to simulate an outage
+        let app = test_app_with_id_and_redis("test-id-999".to_string(), "redis://127.0.0.1:16399").await;
+
+        // Create a published product
+        let create_payload = json!({
+            "title": "Outage Hoodie",
+            "handle": "outage-hoodie",
+            "price_cents": 4500,
+            "inventory_quantity": 8,
+            "published": true,
+            "description": "Works even when Redis is down"
+        });
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(PRODUCTS_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&create_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // Fetching the storefront page should still succeed (200 OK) by falling back to DB
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/products/outage-hoodie")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body_bytes = axum::body::to_bytes(response.into_body(), 10000).await.unwrap();
+        let html_string = String::from_utf8(body_bytes.to_vec()).unwrap();
+        assert!(html_string.contains("Outage Hoodie"));
+        assert!(html_string.contains("$45.00"));
+        assert!(html_string.contains("8 in stock"));
     }
 }
 
