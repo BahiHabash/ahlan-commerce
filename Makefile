@@ -18,7 +18,7 @@ PG_CTL ?= pg_ctl
 PG_SERVICE ?= postgresql-x64-16
 PGDATA ?= E:/Set_up_Porgrams/PostgreSql/data
 
-.PHONY: start stop run-api test db-start db-create db-check db-migrate health cornucopia-generate
+.PHONY: start stop run-api run-admin test db-start db-create db-check db-migrate health cornucopia-generate redis-health
 
 start:
 	mprocs -c mprocs.yaml
@@ -56,6 +56,9 @@ db-migrate:
 
 health:
 	curl -f http://localhost:3000/health
+
+redis-health:
+	redis-cli ping
 
 cornucopia-generate:
 ifeq ($(OS),Windows_NT)
