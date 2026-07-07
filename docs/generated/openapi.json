@@ -1,0 +1,294 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "api",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/products": {
+      "get": {
+        "tags": [
+          "crate::handlers"
+        ],
+        "operationId": "list_products_handler",
+        "responses": {
+          "200": {
+            "description": "List all products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crate::handlers"
+        ],
+        "operationId": "create_product_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created product",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/published": {
+      "get": {
+        "tags": [
+          "crate::handlers"
+        ],
+        "operationId": "list_published_products_handler",
+        "responses": {
+          "200": {
+            "description": "List published products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/{id}/publication": {
+      "patch": {
+        "tags": [
+          "crate::handlers"
+        ],
+        "operationId": "update_product_publication_handler",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePublicationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated product publication status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "crate::handlers"
+        ],
+        "operationId": "health_handler",
+        "responses": {
+          "200": {
+            "description": "Service health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ProductCreateRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "handle",
+          "price_cents",
+          "inventory_quantity",
+          "published"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "handle": {
+            "type": "string"
+          },
+          "inventory_quantity": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "price_cents": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "ProductDto": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "handle",
+          "price_cents",
+          "inventory_quantity",
+          "published",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "handle": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "inventory_quantity": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "price_cents": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ProductResponse": {
+        "type": "object",
+        "required": [
+          "product"
+        ],
+        "properties": {
+          "product": {
+            "$ref": "#/components/schemas/ProductDto"
+          }
+        }
+      },
+      "ProductsResponse": {
+        "type": "object",
+        "required": [
+          "products"
+        ],
+        "properties": {
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductDto"
+            }
+          }
+        }
+      },
+      "UpdatePublicationRequest": {
+        "type": "object",
+        "required": [
+          "published"
+        ],
+        "properties": {
+          "published": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "ahlan-commerce",
+      "description": "Ahlan Commerce API"
+    }
+  ]
+}

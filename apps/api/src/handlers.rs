@@ -9,12 +9,26 @@ use rootcause::prelude::*;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses(
+        (status = 200, description = "Service health status", body = HealthResponse)
+    )
+)]
 pub async fn health_handler() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok".to_string(),
     })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/products",
+    responses(
+        (status = 200, description = "List all products", body = ProductsResponse)
+    )
+)]
 pub async fn list_products_handler(
     State(state): State<AppState>,
 ) -> Result<Json<ProductsResponse>, AppError> {
@@ -25,6 +39,14 @@ pub async fn list_products_handler(
     }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/products",
+    request_body = ProductCreateRequest,
+    responses(
+        (status = 201, description = "Created product", body = ProductResponse)
+    )
+)]
 pub async fn create_product_handler(
     State(state): State<AppState>,
     Json(payload): Json<ProductCreateRequest>,
@@ -45,6 +67,13 @@ pub async fn create_product_handler(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/products/published",
+    responses(
+        (status = 200, description = "List published products", body = ProductsResponse)
+    )
+)]
 pub async fn list_published_products_handler(
     State(state): State<AppState>,
 ) -> Result<Json<ProductsResponse>, AppError> {
@@ -55,6 +84,17 @@ pub async fn list_published_products_handler(
     }))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/products/{id}/publication",
+    request_body = UpdatePublicationRequest,
+    params(
+        ("id" = String, Path, description = "Product ID")
+    ),
+    responses(
+        (status = 200, description = "Updated product publication status", body = ProductResponse)
+    )
+)]
 pub async fn update_product_publication_handler(
     State(state): State<AppState>,
     Path(id): Path<String>,

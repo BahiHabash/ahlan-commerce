@@ -1,9 +1,9 @@
-pub mod config;
-pub mod dto;
-pub mod error;
-pub mod graphql;
-pub mod handlers;
-pub mod routes;
+use api::config;
+use api::error;
+use api::graphql;
+use api::handlers;
+use api::routes;
+use api::openapi;
 
 use std::sync::Arc;
 use axum::{
@@ -13,7 +13,8 @@ use axum::{
     middleware::{self, Next},
     response::Response,
 };
-use crate::graphql::AppSchema;
+use utoipa::OpenApi;
+use utoipa_scalar::Servable;
 use catalog::{Catalog, RealClock, RealIdGenerator};
 use config::Config;
 use routes::{HEALTH_ROUTE, PRODUCTS_ROUTE, PUBLISHED_PRODUCTS_ROUTE, PRODUCT_PUBLICATION_ROUTE, IMPORT_JOBS_ROUTE};
@@ -22,13 +23,7 @@ use handlers::{health_handler, list_products_handler, create_product_handler,
 use deadpool_postgres::{Config as DbConfig, Runtime};
 use tokio_postgres::NoTls;
 
-#[derive(Clone)]
-pub struct AppState {
-    pub config: Config,
-    pub catalog: Catalog,
-    pub schema: AppSchema,
-    pub cache: cache::Cache,
-}
+use api::AppState;
 
 async fn request_id_middleware(mut req: Request, next: Next) -> Response {
     let request_id = req
@@ -146,6 +141,7 @@ async fn main() {
         });
 
     let app = Router::new()
+        .merge(utoipa_scalar::Scalar::with_url("/docs/scalar", openapi::ApiDoc::openapi()))
         .route(HEALTH_ROUTE, get(health_handler))
         .route(
             PRODUCTS_ROUTE,
@@ -282,6 +278,7 @@ mod integration_tests {
             });
 
         Router::new()
+            .merge(utoipa_scalar::Scalar::with_url("/docs/scalar", openapi::ApiDoc::openapi()))
             .route(HEALTH_ROUTE, get(health_handler))
             .route(
                 PRODUCTS_ROUTE,

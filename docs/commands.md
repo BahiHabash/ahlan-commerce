@@ -1,40 +1,27 @@
-# Project Commands
+# Commands List
 
-This document lists the available commands defined in the project's [Makefile](file:///e:/2-Projects/MasteryIT_Intern/onboarding/Makefile) for development, testing, and operations.
+The repository uses `make` to automate common development workflows. Below is a reference for the available targets.
 
-## Available Targets
+## Running the App
 
-### `make start`
-Opens the local multi-process development board with `mprocs`.
-* **Wraps**: `mprocs -c mprocs.yaml`
+- `make start`: Starts the local development environment (API server, Admin UI, etc.) using `mprocs`.
+- `make run-api`: Starts the Axum backend on port 3000.
+- `make run-admin`: Starts the frontend Admin dashboard in development mode.
 
-### `make stop`
-Prints a note explaining that PostgreSQL is managed by your local service manager.
+## Database
 
-### `make run-api`
-Starts the Axum API server in development mode.
-* **Wraps**: `cargo run -p api`
+- `make db-start`: Ensures the local PostgreSQL server is running.
+- `make db-create`: Creates the `ahlan_commerce` database if it doesn't already exist.
+- `make db-check`: Runs `db-start` and `db-create` sequentially.
+- `make db-migrate`: Applies Atlas database migrations.
+- `make cornucopia-generate`: Generates type-safe Rust code from SQL queries in `db/queries`.
 
-### `make test`
-Runs all unit and integration tests sequentially across the cargo workspace.
-* **Wraps**: `cargo test -- --test-threads=1`
+## Testing & Checks
 
-### `make db-start`
-Starts local PostgreSQL with the Windows service when available, falls back to `pg_ctl`, then checks that local PostgreSQL is accepting connections.
-* **Wraps**: `Start-Service postgresql-x64-16`, `pg_ctl -D ... start`, and `pg_isready -h localhost -p 5432 -U postgres`
+- `make test`: Runs unit and integration tests across the workspace.
+- `make health`: Verifies the API is up by calling the health endpoint (`http://localhost:3000/health`).
 
-### `make db-create`
-Creates the local `ahlan_commerce` database if it does not already exist.
-* **Wraps**: `psql` and `createdb`
+## Documentation
 
-### `make db-check`
-Runs the local database readiness and creation steps.
-* **Wraps**: `make db-start` and `make db-create`
-
-### `make db-migrate`
-Applies all pending database migrations to the local database environment using Atlas.
-* **Wraps**: `./atlas.exe migrate apply --env local` (on Windows) or `atlas migrate apply --env local` (on Unix/macOS)
-
-### `make health`
-Performs a health check request against the API server to verify that it is running and healthy.
-* **Wraps**: `curl -f http://localhost:3000/health`
+- `make docs-api`: Generates the OpenAPI schema (`docs/generated/openapi.json`) and GraphQL schema (`docs/generated/schema.graphql`). This is useful when you add or modify endpoints and need to update the API contract.
+- `make docs-api-check`: Runs the generation and ensures there is no drift by checking for git diffs. This command is run in CI to prevent stale documentation from being merged.

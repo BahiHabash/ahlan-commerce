@@ -1,6 +1,6 @@
 use catalog::Product as DomainProduct;
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, utoipa::ToSchema)]
 pub struct ProductCreateRequest {
     pub title: String,
     pub handle: String,
@@ -23,7 +23,7 @@ impl From<ProductCreateRequest> for catalog::CreateProductParams {
     }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct ProductDto {
     pub id: String,
     pub title: String,
@@ -54,22 +54,22 @@ impl From<DomainProduct> for ProductDto {
     }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct ProductResponse {
     pub product: ProductDto,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct UpdatePublicationRequest {
     pub published: bool,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct ProductsResponse {
     pub products: Vec<ProductDto>,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct HealthResponse {
     pub status: String,
 }
