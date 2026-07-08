@@ -23,8 +23,5 @@ WORKDIR /app
 COPY --from=builder /usr/src/ahlan-commerce/target/release/api /usr/local/bin/api
 COPY --from=builder /usr/src/ahlan-commerce/target/release/worker /usr/local/bin/worker
 
-# Expose the API port assuming the standard 3000
-EXPOSE 3000
-
-# The startup command is defaulted to the API
-CMD ["api"]
+# The startup command is defaulted to the worker
+CMD ["worker"]
