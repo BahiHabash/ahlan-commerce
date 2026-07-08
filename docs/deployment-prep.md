@@ -30,17 +30,25 @@ These commands produce the artifacts ready for production:
 
 ## Start Commands
 
-These commands run the compiled artifacts in production:
+These commands run the compiled artifacts in production. **Note on Coolify/Docker:** Do not use `make` inside Docker containers as it traps termination signals and prevents graceful shutdowns. Use the raw commands instead.
 
-- **API Start:** `make start-api` (or just `api` if running inside the Docker container, since it's copied to `/usr/local/bin`)
-- **Worker Start:** `make start-worker` (or just `worker` if running inside the Docker container)
-- **Admin Start:** `make start-admin` (runs `cd apps/admin && npm start`)
+- **API Start:** 
+  - *Bare Metal:* `make start-api`
+  - *Coolify / Docker:* `api` (the Dockerfile copies the binary to `/usr/local/bin`)
+- **Worker Start:** 
+  - *Bare Metal:* `make start-worker`
+  - *Coolify / Docker:* `worker` (the Dockerfile copies the binary to `/usr/local/bin`)
+- **Admin Start:** 
+  - *Bare Metal:* `make start-admin`
+  - *Coolify / Nixpacks:* `npm start` (or `npm run start`)
 
 ## Migrations
 
 Migrations are managed externally via Atlas, ensuring they are separated from application code startups. 
 
-- **Migration Command:** `make db-migrate-prod` (runs `atlas migrate apply --env production --url $DATABASE_URL`)
+- **Migration Command:** 
+  - *Bare Metal:* `make db-migrate-prod`
+  - *Coolify Pre-Deploy Script:* `atlas migrate apply --env production --url $DATABASE_URL`
 - Migrations must be run and verified *before* rolling out new instances of the API or Worker services.
 
 ## Health Checks
