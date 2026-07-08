@@ -158,13 +158,11 @@ async fn main() {
         .layer(middleware::from_fn(request_id_middleware))
         .with_state(state);
 
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], config.port));
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&config.api_bind_addr).await.unwrap();
     
     tracing::info!(
-        port = config.port,
+        api_bind_addr = %config.api_bind_addr,
         env = %config.env,
-        addr = %addr,
         "Ahlan Commerce Catalog API starting up"
     );
     
@@ -220,7 +218,7 @@ mod integration_tests {
 
         let state = AppState {
             config: Config {
-                port: 3000,
+                api_bind_addr: "0.0.0.0:3000".to_string(),
                 env: "test".to_string(),
                 database_url,
                 redis_url: redis_url.to_string(),

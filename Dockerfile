@@ -1,0 +1,32 @@
+FROM rust:1.79-slim AS builder
+
+# Set working directory
+WORKDIR /usr/src/ahlan-commerce
+
+# Install dependencies needed for compiling certain Rust crates (like OpenSSL and Postgres drivers)
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
+# Copy all the source code
+COPY . .
+
+# Build both API and Worker binaries in release mode
+RUN cargo build --release -p api -p worker
+
+FROM debian:bookworm-slim AS runtime
+
+# Install CA certificates needed for external APIs
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the built binaries from the builder stage
+COPY --from=builder /usr/src/ahlan-commerce/target/release/api /usr/local/bin/api
+COPY --from=builder /usr/src/ahlan-commerce/target/release/worker /usr/local/bin/worker
+
+# Expose the API port assuming the standard 3000
+EXPOSE 3000
+
+# The startup command is meant to be overridden in the container scheduler (Coolify/Docker Compose)
+# Examples: 
+# CMD ["api"] 
+# CMD ["worker"]

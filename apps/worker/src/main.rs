@@ -32,7 +32,7 @@ async fn main() {
         .init();
 
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres@localhost:5432/ahlan_commerce".to_string());
+        .expect("DATABASE_URL must be set");
 
     let mut db_cfg = DbConfig::new();
     db_cfg.url = Some(database_url);
