@@ -25,16 +25,15 @@ See `.env.example` for reference templates.
 
 These commands produce the artifacts ready for production:
 
-- **API Build:** `cargo build -p api --release`
-- **Worker Build:** `cargo build -p worker --release`
+- **API and Worker Build:** `make build-release` (runs `cargo build --release`)
 - **Admin Build:** `cd apps/admin && npm ci && npm run build`
 
 ## Start Commands
 
 These commands run the compiled artifacts in production:
 
-- **API Start:** `./target/release/api`
-- **Worker Start:** `./target/release/worker`
+- **API Start:** `make start-api` (or just `api` if running inside the Docker container, since it's copied to `/usr/local/bin`)
+- **Worker Start:** `make start-worker` (or just `worker` if running inside the Docker container)
 - **Admin Start:** `cd apps/admin && npm start` (or equivalent Next.js start command)
 
 ## Migrations

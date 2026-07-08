@@ -32,6 +32,15 @@ run-api:
 run-admin:
 	cd apps/admin && npm run dev
 
+build-release:
+	cargo build --release -p api -p worker
+
+start-api:
+	./target/release/api
+
+start-worker:
+	./target/release/worker
+
 test:
 	cargo test -- --test-threads=1
 
