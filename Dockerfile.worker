@@ -1,4 +1,4 @@
-FROM rust:1.79-slim AS builder
+FROM rust:1.96-slim AS builder
 
 # Set working directory
 WORKDIR /usr/src/ahlan-commerce
