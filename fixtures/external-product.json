@@ -1,0 +1,8 @@
+{
+  "external_id": "ext_1001",
+  "name": "Coffee Mug",
+  "slug": "coffee-mug",
+  "price": "25.00",
+  "stock": 12,
+  "is_visible": true
+}

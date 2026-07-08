@@ -5,6 +5,7 @@ pub mod graphql;
 pub mod handlers;
 pub mod routes;
 pub mod openapi;
+pub mod adapter;
 
 #[derive(Clone)]
 pub struct AppState {
