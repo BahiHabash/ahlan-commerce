@@ -11,3 +11,9 @@ env "local" {
     }
   }
 }
+
+env "production" {
+  migration {
+    dir = "file://db/migrations"
+  }
+}
