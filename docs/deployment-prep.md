@@ -26,7 +26,7 @@ See `.env.example` for reference templates.
 These commands produce the artifacts ready for production:
 
 - **API and Worker Build:** `make build-release` (runs `cargo build --release`)
-- **Admin Build:** `cd apps/admin && npm ci && npm run build`
+- **Admin Build:** `make build-admin` (runs `cd apps/admin && npm ci && npm run build`)
 
 ## Start Commands
 
@@ -34,13 +34,13 @@ These commands run the compiled artifacts in production:
 
 - **API Start:** `make start-api` (or just `api` if running inside the Docker container, since it's copied to `/usr/local/bin`)
 - **Worker Start:** `make start-worker` (or just `worker` if running inside the Docker container)
-- **Admin Start:** `cd apps/admin && npm start` (or equivalent Next.js start command)
+- **Admin Start:** `make start-admin` (runs `cd apps/admin && npm start`)
 
 ## Migrations
 
 Migrations are managed externally via Atlas, ensuring they are separated from application code startups. 
 
-- **Migration Command:** `atlas migrate apply --env production --url $DATABASE_URL`
+- **Migration Command:** `make db-migrate-prod` (runs `atlas migrate apply --env production --url $DATABASE_URL`)
 - Migrations must be run and verified *before* rolling out new instances of the API or Worker services.
 
 ## Health Checks

@@ -32,6 +32,12 @@ run-api:
 run-admin:
 	cd apps/admin && npm run dev
 
+build-admin:
+	cd apps/admin && npm ci && npm run build
+
+start-admin:
+	cd apps/admin && npm start
+
 build-release:
 	cargo build --release -p api -p worker
 
@@ -62,6 +68,9 @@ db-check: db-start db-create
 
 db-migrate:
 	$(ATLAS) migrate apply --env local
+
+db-migrate-prod:
+	$(ATLAS) migrate apply --env production --url "$(DATABASE_URL)"
 
 health:
 	curl -f http://localhost:3000/health
