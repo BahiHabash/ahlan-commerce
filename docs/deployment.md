@@ -50,7 +50,7 @@ The following environment variables must be configured in your Coolify instances
 - `REDIS_URL`: Full Redis connection string.
 
 ### Admin Frontend
-- `ADMIN_PUBLIC_API_URL`: `http://178.104.61.10:8081`
+- `VITE_ADMIN_PUBLIC_API_URL`: `http://178.104.61.10:8081`
 
 ## Important URLs
 

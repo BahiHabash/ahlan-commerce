@@ -17,7 +17,7 @@ All required environment variables must be explicit. The `API` and `Worker` bina
 - `API_BIND_ADDR`: The host and port for the API service (e.g., `0.0.0.0:3000`). Required by: **API Service**.
 - `DATABASE_URL`: The full PostgreSQL connection string. Required by: **API Service** and **Worker Service**.
 - `REDIS_URL`: The Redis connection string. Required by: **API Service**.
-- `ADMIN_PUBLIC_API_URL`: The URL that the Admin Frontend will use to reach the API (e.g., `https://api.example.com`). Required by: **Admin Frontend**.
+- `VITE_ADMIN_PUBLIC_API_URL`: The URL that the Admin Frontend will use to reach the API (e.g., `https://api.example.com`). Required by: **Admin Frontend**.
 
 See `.env.example` for reference templates.
 
