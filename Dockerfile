@@ -14,10 +14,17 @@ RUN cargo build --release -p api -p worker
 
 FROM debian:bookworm-slim AS runtime
 
-# Install CA certificates needed for external APIs
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install CA certificates and curl
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
+
+# Install Atlas CLI
+RUN curl -sSf https://atlasgo.sh | sh
 
 WORKDIR /app
+
+# Copy migration files for pre-deploy scripts
+COPY atlas.hcl .
+COPY db/migrations db/migrations
 
 # Copy the built binaries from the builder stage
 COPY --from=builder /usr/src/ahlan-commerce/target/release/api /usr/local/bin/api
