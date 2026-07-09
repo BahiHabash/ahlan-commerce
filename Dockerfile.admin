@@ -1,0 +1,30 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY apps/admin/package.json apps/admin/package-lock.json* ./
+
+# Install dependencies (including devDependencies needed for vite build)
+RUN npm ci
+
+# Copy the rest of the application
+COPY apps/admin ./
+
+# Build the application
+RUN npm run build
+
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+# Copy necessary files from builder
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
+# Expose the port used by vite preview
+EXPOSE 3000
+
+# Start the application using the start script we added earlier
+CMD ["npm", "start"]
