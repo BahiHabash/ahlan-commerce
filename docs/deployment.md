@@ -22,6 +22,7 @@ The deployment consists of the following independent services deployed within Co
    - Start Command: `api`
    - Pre-Deploy Script: `atlas migrate apply --env production --url $DATABASE_URL`
    - Port Expose: `3000`
+   - Port Mapping: `8081:3000`
 
 4. **Worker Service (Rust)**
    - Service Type: Application (Docker based)
@@ -29,11 +30,11 @@ The deployment consists of the following independent services deployed within Co
    - Start Command: `worker`
 
 5. **Admin Frontend (Next.js/React/Vite)**
-   - Service Type: Application (Nixpacks / Node.js)
-   - Base Directory: `/apps/admin`
-   - Build Command: `npm run build`
+   - Service Type: Application (Docker based)
+   - Dockerfile: `/Dockerfile.admin`
    - Start Command: `npm start`
    - Port Expose: `3000`
+   - Port Mapping: `8080:3000`
 
 ## Environment Variables
 
@@ -49,15 +50,15 @@ The following environment variables must be configured in your Coolify instances
 - `REDIS_URL`: Full Redis connection string.
 
 ### Admin Frontend
-- `ADMIN_PUBLIC_API_URL`: The public URL of the deployed API Service (e.g., `https://api.yourdomain.com`).
+- `ADMIN_PUBLIC_API_URL`: `http://178.104.61.10:8081`
 
 ## Important URLs
 
 Once deployed, you can verify the deployment at the following URLs:
 
-- **Public App URL**: `https://[ADMIN_FRONTEND_DOMAIN]`
-- **API Health Endpoint**: `https://[API_DOMAIN]/health`
-- **Generated Docs**: `https://[API_DOMAIN]/docs` (if enabled in production)
+- **Public App URL**: `http://178.104.61.10:8080`
+- **API Health Endpoint**: `http://178.104.61.10:8081/health`
+- **Generated Docs**: `http://178.104.61.10:8081/docs` (if enabled in production)
 
 ## Atlas Migrations (Manual Fallback in CI)
 
