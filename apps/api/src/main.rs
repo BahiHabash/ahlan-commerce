@@ -13,6 +13,7 @@ use axum::{
     middleware::{self, Next},
     response::Response,
 };
+use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 use utoipa_scalar::Servable;
 use catalog::{Catalog, RealClock, RealIdGenerator};
@@ -155,6 +156,7 @@ async fn main() {
         .route(routes::STOREFRONT_PRODUCT_ROUTE, get(handlers::storefront_product_handler))
         .fallback(handlers::fallback_handler)
         .layer(trace_layer)
+        .layer(CorsLayer::permissive())
         .layer(middleware::from_fn(request_id_middleware))
         .with_state(state);
 
@@ -290,6 +292,7 @@ mod integration_tests {
             .route(routes::STOREFRONT_PRODUCT_ROUTE, get(handlers::storefront_product_handler))
             .fallback(handlers::fallback_handler)
             .layer(trace_layer)
+            .layer(CorsLayer::permissive())
             .layer(middleware::from_fn(request_id_middleware))
             .with_state(state)
     }
