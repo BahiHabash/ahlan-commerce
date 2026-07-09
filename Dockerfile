@@ -16,15 +16,17 @@ COPY apps/api/Cargo.toml apps/api/Cargo.toml
 COPY apps/worker/Cargo.toml apps/worker/Cargo.toml
 COPY packages/catalog/Cargo.toml packages/catalog/Cargo.toml
 COPY packages/cache/Cargo.toml packages/cache/Cargo.toml
+COPY packages/db/Cargo.toml packages/db/Cargo.toml
 
 # Create dummy source files so cargo can compile all dependencies
-RUN mkdir -p apps/api/src apps/worker/src packages/catalog/src packages/cache/src \
+RUN mkdir -p apps/api/src apps/worker/src packages/catalog/src packages/cache/src packages/db/src \
     && echo "fn main() {}" > apps/api/src/main.rs \
     && echo "fn main() {}" > apps/worker/src/main.rs \
     && echo "" > packages/catalog/src/lib.rs \
     && echo "" > packages/cache/src/lib.rs \
+    && echo "" > packages/db/src/lib.rs \
     && cargo build --release -p api -p worker \
-    && rm -rf apps/api/src apps/worker/src packages/catalog/src packages/cache/src
+    && rm -rf apps/api/src apps/worker/src packages/catalog/src packages/cache/src packages/db/src
 
 # Copy all the source code
 COPY . .
