@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: ahlan_commerce
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Install Atlas
+      run: curl -sSf https://atlasgo.sh | sh
+
+    - name: Install Cornucopia
+      run: cargo install cornucopia
+
+    - name: Rust Formatting Check
+      run: cargo fmt --check
+
+    - name: Rust Linting (Clippy)
+      run: cargo clippy --workspace --all-targets -- -D warnings
+
+    - name: Rust Tests
+      run: make test
+
+    - name: Frontend Build Check
+      run: make build-admin
+
+    - name: Generated Docs Drift Check
+      run: make docs-api-check
+
+    - name: DB Migration Check
+      env:
+        DATABASE_URL: postgres://postgres@localhost:5432/ahlan_commerce?sslmode=disable
+      run: make db-migrate
+
+    - name: Cornucopia Regeneration Drift Check
+      env:
+        DATABASE_URL: postgres://postgres@localhost:5432/ahlan_commerce?sslmode=disable
+      run: |
+        make cornucopia-generate
+        git diff --exit-code packages/db/src/
